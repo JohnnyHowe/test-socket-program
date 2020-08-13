@@ -12,17 +12,25 @@ TIME_REQUEST_CODE = 0x0002
 
 class DateClient:
 
-    def __init__(self):
-        self.MAGIC_NUMBER = 0x497E
-        self.DT_REQUEST_CODE = 0x0001
-        self.DT_RESPONSE_CODE = 0x0002
+    MAGIC_NUMBER = 0x497E
+    DT_REQUEST_CODE = 0x0001
+    DT_RESPONSE_CODE = 0x0002
+    DATE_REQUEST_CODE = 0x0001
+    TIME_REQUEST_CODE = 0x0002
 
     def get_date_time(self, request_type, addr, port, timeout=1):
         """ Get the info from the server at addr on port.
         Blocks until a response is received (or times out).
 
         if a valid response is found, return a big tuple of the info
-        if not, return None """
+        if not, return None
+
+        Args:
+            request_type (int): what are we requesting? eg. DateClient.TIME_REQUEST_CODE
+            addr (str): ip address in dotted decimal
+            port (int): port to connect to
+            timeout (float): timeout of the connection
+        """
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # Send a request packet
@@ -49,13 +57,9 @@ class DateClient:
         Returns:
             (bytearray) the packet made
         """
-        if request_type == "date":
-            request_type_int = DATE_REQUEST_CODE
-        else:
-            request_type_int = TIME_REQUEST_CODE
         magic_no_byte1 = self.MAGIC_NUMBER >> 8
         magic_no_byte2 = self.MAGIC_NUMBER & 0xFF
-        return bytearray([magic_no_byte1, magic_no_byte2, 0, 1, 0, request_type_int])
+        return bytearray([magic_no_byte1, magic_no_byte2, 0, 1, 0, request_type])
 
     def handle_readable(self, readable):
         """ Handle a incoming packet.
@@ -92,33 +96,41 @@ class DateClient:
         hour = packet[10]
         minute = packet[11]
         length = packet[12]
+        text = packet[13:].decode("utf-8")
 
+        self.check_response(magic_no, packet_type, language_code, year, month, day, hour, minute, length, text)
+        return magic_no, packet_type, language_code, year, month, day, hour, minute, length, text
+
+    def check_response(self, magic_no, packet_type, language_code, year, month, day, hour, minute, length, text):
+        """ Check the info received from the packet.
+        Checks specified in assignment doc.
+
+        Spit out message with why things are wrong if they are wrong
+
+        Return:
+            (bool): whether response is valid
+        """
         if magic_no != self.MAGIC_NUMBER:
             print("Got response with wrong magic number")
-            return
-        if packet_type != self.DT_RESPONSE_CODE:
+        elif packet_type != self.DT_RESPONSE_CODE:
             print("Got response with wrong packet_type")
-            return
-        if language_code not in [1, 2, 3]:  # 1 = eng, 2 = mao, 3 = ger
+        elif language_code not in [1, 2, 3]:  # 1 = eng, 2 = mao, 3 = ger
             print("Got response with invalid language code")
-            return
-        if year < 0:
+        elif year < 0:
             print("Got response with invalid year")
-            return
-        if not 1 <= month <= 12:
+        elif not 1 <= month <= 12:
             print("Got response with invalid month")
-            return
-        if not 1 <= day <= 31:
+        elif not 1 <= day <= 31:
             print("Got response with invalid day")
-            return
-        if not 0 <= hour <= 23:
+        elif not 0 <= hour <= 23:
             print("Got response with invalid hour")
-            return
-        if not 0 <= minute <= 59:
+        elif not 0 <= minute <= 59:
             print("Got response with invalid hour")
-            return
-
-        return magic_no, packet_type, language_code, year, month, day, hour, minute, length
+        elif not len(text) == length:
+            print("Got response with incorrect length")
+        else:
+            return True
+        return False
 
 
 def check_num_parameters():
@@ -220,7 +232,8 @@ def print_formatted_info(info):
     info is to be a tuple of the response packet. """
     print("""
 Date: {}/{}/{}
-Time: {}:{}""".format(info[5], info[4], info[3], info[6], info[7]))
+Time: {}:{}
+Text: {}""".format(info[5], info[4], info[3], info[6], info[7], info[9]))
 
 
 if __name__ == '__main__':
@@ -230,8 +243,13 @@ if __name__ == '__main__':
     port = get_port_parameter()
     info_type = get_info_type_parameter()
 
+    if info_type == "date":
+        info_type_int = DateClient.DATE_REQUEST_CODE
+    else:
+        info_type_int = DateClient.TIME_REQUEST_CODE
+
     # Send request and get the response
     client = DateClient()
-    info = client.get_date_time(0, addr, port)
+    info = client.get_date_time(info_type_int, addr, port)
     print_formatted_info(info)
 

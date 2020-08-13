@@ -19,17 +19,47 @@ class DateServer:
         self.DT_REQUEST_CODE = 0x0001
         self.DT_RESPONSE_CODE = 0x0002
         self.DATE_REQUEST_CODE = 0x0001
-        self.TIME_REQUEST_CODE = 0x0001
+        self.TIME_REQUEST_CODE = 0x0002
 
         self.ip = socket.gethostbyname(socket.gethostname())
 
-        self.eng_port = eng_port
-        self.mao_port = mao_port
-        self.ger_port = ger_port
+        self.ENG_CODE = 1
+        self.MAO_CODE = 2
+        self.GER_CODE = 3
 
-        self.eng_socket = self.get_socket(self.eng_port)
-        self.mao_socket = self.get_socket(self.mao_port)
-        self.ger_socket = self.get_socket(self.ger_port)
+        self.TEXT_FORMATS = {
+            self.TIME_REQUEST_CODE: {
+                self.ENG_CODE: "The current time is {0}:{1}",
+                self.MAO_CODE: "Ko te wa o tenei wa {0}:{1}",
+                self.GER_CODE: "Die Uhrzeit ist {0}:{1}",
+            },
+            self.DATE_REQUEST_CODE: {
+                self.ENG_CODE: "Today's date is {2} {3}, {4}",
+                self.MAO_CODE: "Ko te ra o tenei ra ko {2} {3}, {4}",
+                self.GER_CODE: "Heute ist der {2}. {3} {4}"
+            }
+        }
+
+        self.MONTHS = {
+            self.ENG_CODE: ["January", "February", "March", "April", "May", "June", "July",
+                            "August", "September", "October", "November", "December"],
+            self.MAO_CODE: ["Kohi-tātea", "Hui-tanguru", "Poutū-te-rangi", "Paenga-whāwhā",
+                            "Haratua", "Pipiri", "Hongonui", "Here-turi-kōkā", "Mahuru",
+                            "Whiringa-ā-nuku", "Whiringa-ā-rangi", "Hakihea"],
+            self.GER_CODE: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
+                            "August", "September", "Oktober", "November", "Dezember"],
+        }
+
+        self.ports = {
+            self.ENG_CODE: eng_port,
+            self.MAO_CODE: mao_port,
+            self.GER_CODE: ger_port,
+        }
+        self.language_codes = {v: k for k, v in self.ports.items()}      # Reverse ports dict
+
+        self.sockets = {}
+        for code in [self.ENG_CODE, self.MAO_CODE, self.GER_CODE]:
+            self.sockets[code] = self.get_socket(self.ports[code])
 
     def get_socket(self, port):
         """ Get a new socket bound to this machine and port. """
@@ -41,7 +71,7 @@ class DateServer:
     def run(self):
         """ Run the server. Is blocking.
         If one of the sockets receives a request packet, send back the info. """
-        inputs = [self.eng_socket, self.mao_socket, self.ger_socket]
+        inputs = [self.sockets[self.ENG_CODE], self.sockets[self.MAO_CODE], self.sockets[self.GER_CODE]]
         outputs = []
         while inputs:
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
@@ -69,13 +99,14 @@ class DateServer:
             print("Got a packet that wasn't a valid request.")
             return
         else:
-            magic_no, info_type, packet_type = packet_info
+            magic_no, packet_type, request_type = packet_info
 
-        if not self.check_request(magic_no, info_type, packet_type):
+        if not self.check_request(magic_no, packet_type, request_type):
             print("Got a packet that wasn't a valid request.")
             return
 
-        response_packet = self.compose_response_packet(info_type)
+        port = sock.getsockname()[1]
+        response_packet = self.compose_response_packet(request_type, self.language_codes[port])
         print("Valid packet received, sending response.")
         sock.sendto(response_packet, source)
 
@@ -125,7 +156,7 @@ class DateServer:
         packet_type = packet[4] << 8 | packet[5]
         return magic_no, info_type, packet_type
 
-    def compose_response_packet(self, request_type):
+    def compose_response_packet(self, request_type, language_code):
         """ Compose a response packet in the order
             magic number (2 bytes),
             packet type (2 bytes),
@@ -137,12 +168,21 @@ class DateServer:
             minute (1 byte),
             length (1 byte),
             text ...
+
+        Args:
+            request_type (int): what is the user requesting? (TIME_REQUEST_CODE vs DATE_...)
+            language_code (int): what language?
+
+        Returns:
+            (bytearray): packet made
         """
-        # TODO language code, time
         today = datetime.datetime.today()
+
+        text = self.TEXT_FORMATS[request_type][language_code].format(today.hour, today.minute, self.MONTHS[language_code][today.month - 1], today.day, today.year)
+        text_array = bytearray(text, "utf-8")
+
         magic_no_byte1 = self.MAGIC_NUMBER >> 8
         magic_no_byte2 = self.MAGIC_NUMBER & 0xFF
-        language_code = 1
         packet_list = [
             magic_no_byte1, magic_no_byte2,
             0, self.DT_RESPONSE_CODE,
@@ -150,9 +190,9 @@ class DateServer:
             today.year >> 8, today.year & 0xFF,
             today.month, today.day,
             today.hour, today.minute,
-            0,
+            len(text_array),
         ]
-        return bytearray(packet_list)
+        return bytearray(packet_list) + text_array
 
 
 def get_ports():
