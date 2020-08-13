@@ -5,16 +5,121 @@ import re
 
 MIN_PORT = 1024     # Inclusive
 MAX_PORT = 64000    # Inclusive
-MAGIC_NUMBER = 0x497E
-DT_REQUEST_CODE = 0x0001
-DT_RESPONSE_CODE = 0x0001
+
 DATE_REQUEST_CODE = 0x0001
-TIME_REQUEST_CODE = 0x0001
+TIME_REQUEST_CODE = 0x0002
 
 
 class DateClient:
+
     def __init__(self):
-        pass
+        self.MAGIC_NUMBER = 0x497E
+        self.DT_REQUEST_CODE = 0x0001
+        self.DT_RESPONSE_CODE = 0x0002
+
+    def get_date_time(self, request_type, addr, port, timeout=1):
+        """ Get the info from the server at addr on port.
+        Blocks until a response is received (or times out).
+
+        if a valid response is found, return a big tuple of the info
+        if not, return None """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        # Send a request packet
+        sock.sendto(self.compose_request_packet(request_type), (addr, port))
+
+        # Wait for response
+        readable, writable, exceptional = select.select([sock], [], [sock], timeout)
+        for item in readable:
+            packet_info = self.handle_readable(item)
+            if packet_info is not None:
+                return packet_info
+
+    def compose_request_packet(self, request_type):
+        """ Get a formatted request packet with the packetType and requestType.
+
+        To be a 6 byte bytearray where
+          - 1st and 2nd bytes are the magic number
+          - 3rd and 4th bytes are the packet type, this will be request (1)
+          - 5th and 6th bytes are the request type. date = 1, time = 2
+
+        Args:
+            request_type (string): type of request, either "date" or "time".
+
+        Returns:
+            (bytearray) the packet made
+        """
+        if request_type == "date":
+            request_type_int = DATE_REQUEST_CODE
+        else:
+            request_type_int = TIME_REQUEST_CODE
+        magic_no_byte1 = self.MAGIC_NUMBER >> 8
+        magic_no_byte2 = self.MAGIC_NUMBER & 0xFF
+        return bytearray([magic_no_byte1, magic_no_byte2, 0, 1, 0, request_type_int])
+
+    def handle_readable(self, readable):
+        """ Handle a incoming packet.
+        if packet is a valid response, return a big tuple of the info
+        if packet is not a valid response, return None
+
+        Args:
+            readable (list): list of readable incoming things, given by select.select
+        Returns:
+            (tuple): all the info from the packet in a tuple, info specified in assignment,
+        """
+        if isinstance(readable, socket.socket):
+            packet, source = readable.recvfrom(1024)
+            return self.process_response_packet(packet, readable, source)
+
+    def process_response_packet(self, packet, sock, source):
+        """ Given a packet, check if it's a request packet,
+        if the packet is a request, process it and send back the response.
+
+        Args:
+            packet (bytearray): The received packet
+            sock (socket): socket the packet was received from
+            source (tuple): TODO
+        """
+        if len(packet) < 13:    # 13 bytes is the header size
+            print("Got response that was too small")
+
+        magic_no = packet[0] << 8 | packet[1]
+        packet_type = packet[2] << 8 | packet[3]
+        language_code = packet[4] << 8 | packet[5]
+        year = packet[6] << 8 | packet[7]
+        month = packet[8]
+        day = packet[9]
+        hour = packet[10]
+        minute = packet[11]
+        length = packet[12]
+
+        if magic_no != self.MAGIC_NUMBER:
+            print("Got response with wrong magic number")
+            return
+        if packet_type != self.DT_RESPONSE_CODE:
+            print("Got response with wrong packet_type")
+            return
+        if language_code not in [1, 2, 3]:  # 1 = eng, 2 = mao, 3 = ger
+            print("Got response with invalid language code")
+            return
+        if year < 0:
+            print("Got response with invalid year")
+            return
+        if not 1 <= month <= 12:
+            print("Got response with invalid month")
+            return
+        if not 1 <= day <= 31:
+            print("Got response with invalid day")
+            return
+        if not 0 <= hour <= 23:
+            print("Got response with invalid hour")
+            return
+        if not 0 <= minute <= 59:
+            print("Got response with invalid hour")
+            return
+
+        return magic_no, packet_type, language_code, year, month, day, hour, minute, length
+
 
 def check_num_parameters():
     """ Were all 3 parameters given when the program was run?
@@ -38,7 +143,7 @@ def get_info_type_parameter():
     return info_type
 
 
-def get_ip_parameter():
+def get_addr_parameter():
     """ Get the ip parameter (parameter index 2) in dotted decimal form (string).
     Assumes the parameter exists.
 
@@ -48,10 +153,10 @@ def get_ip_parameter():
     Returns:
          (string) ip address the user want's to connect to in dotted decimal.
     """
-    ip = sys.argv[2]
-    if not is_in_dotted_decimal(ip):
-        ip = get_dotted_decimal(ip)
-    return ip
+    addr = sys.argv[2]
+    if not is_in_dotted_decimal(addr):
+        addr = get_dotted_decimal(addr)
+    return addr
 
 
 def is_in_dotted_decimal(addr):
@@ -78,7 +183,6 @@ def get_dotted_decimal(addr):
     Returns:
         (string): IPv4 address of addr (in dotted decimal)
     """
-    # return socket.getaddrinfo(addr, get_port_parameter())
     addr_info = socket.getaddrinfo(addr, get_port_parameter())
     ipv4_info = None
     for info in addr_info:
@@ -111,134 +215,23 @@ def get_port_parameter():
     return port
 
 
-def get_connected_socket(server_ip, port):
-    """ Get a new socket and connect it to server_ip and port.
-    Returns:
-        (socket) socket connected to server_ip and port
-    """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)             # Create a socket object
-    sock.connect((server_ip, port))
-    return sock
-
-
-def compose_request_packet(request_type):
-    """ Get a formatted request packet with the packetType and requestType.
-
-    To be a 6 byte bytearray where
-      - 1st and 2nd bytes are the magic number
-      - 3rd and 4th bytes are the packet type, this will be request (1)
-      - 5th and 6th bytes are the request type. date = 1, time = 2
-
-    Args:
-        request_type (string): type of request, either "date" or "time".
-
-    Returns:
-        (bytearray) the packet made
-    """
-    if request_type == "date":
-        request_type_int = DATE_REQUEST_CODE
-    else:
-        request_type_int = TIME_REQUEST_CODE
-    magic_no_byte1 = MAGIC_NUMBER >> 8
-    magic_no_byte2 = MAGIC_NUMBER & 0xFF
-    return bytearray([magic_no_byte1, magic_no_byte2, 0, 1, 0, request_type_int])
-
-
-def get_padded_bin_str(n, num_chars=16):
-    """ Get the binary representation of the integer n padded with zeros at the beginning such
-    that the string has a length of num_chars.
-
-    Args:
-        n (int): number to convert.
-        num_chars (int): final string length
-
-    Returns:
-        (string) n as a binary string (num_chars long)
-    """
-    bin_n = bin(n)[2:]
-    to_add = ((num_chars - len(bin_n)) % num_chars)
-    return "0" * to_add + bin_n
-
-
-def handle_readable(readable):
-    """ Handle the incoming packets.
-    Given a list of readable sockets, read the data and process it accordingly
-    TODO what does that mean
-
-    Args:
-        readable (list): list of readable incoming things, given by select.select
-    """
-    for sock in readable:
-        if isinstance(sock, socket.socket):
-            packet, source = sock.recvfrom(1024)
-            process_packet(packet, sock, source)
-
-
-def process_packet(packet, sock, source):
-    """ Given a packet, check if it's a request packet,
-    if the packet is a request, process it and send back the response.
-
-    Args:
-        packet (bytearray): The received packet
-        sock (socket): socket the packet was received from
-        source (tuple): TODO
-    """
-    packet_bits = get_response_packet_info(packet)
-    print(packet_bits)
-
-
-def get_response_packet_info(packet):
-    """ Given a packet bytearray, extract the info from it.
-
-    If the packet is the right length to be a response (23 bytes), return its info,
-    If not, return None.
-
-    Args:
-        packet (bytearray): the received packet.
-
-    Returns:
-        (int) magic number from packet
-        (int) packet type (should be 2 for response)
-        (int) language code (1 = english, 2 = maori, 3 = german)
-        (int) year
-        (int) month (1 = jan, 2 = feb ... )
-        (int) day (between 1 and 31 - inclusive)
-        (int) hour (0 to 23 - inclusive)
-        (int) minute (0 to 59 - inclusive)
-        (int) length of text section in bytes
-        (str) text field from packet
-    """
-    if len(packet) < 13:    # 13 bytes is the header size
-        return None
-    magic_no = packet[0] << 8 | packet[1]
-    packet_type = packet[2] << 8 | packet[3]
-    language_code = packet[4] << 8 | packet[5]
-    year = packet[6] << 8 | packet[7]
-    month = packet[8]
-    day = packet[9]
-    hour = packet[10]
-    minute = packet[11]
-    length = packet[12]
-    return magic_no, packet_type, language_code, year, month, day, hour, minute, length, "ass"
+def print_formatted_info(info):
+    """ Print out the info nicely.
+    info is to be a tuple of the response packet. """
+    print("""
+Date: {}/{}/{}
+Time: {}:{}""".format(info[5], info[4], info[3], info[6], info[7]))
 
 
 if __name__ == '__main__':
+    # Get parameters
     check_num_parameters()
-    ip = get_ip_parameter()
+    addr = get_addr_parameter()
     port = get_port_parameter()
     info_type = get_info_type_parameter()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # Send request and get the response
+    client = DateClient()
+    info = client.get_date_time(0, addr, port)
+    print_formatted_info(info)
 
-    print("Yelling at {} on port {}".format(ip, port))
-
-    request_packet = compose_request_packet(info_type)
-    sock.sendto(request_packet, (ip, port))
-
-    inputs = [sock]
-    outputs = []
-    message_queues = {}
-
-    while inputs:
-        readable, writable, exceptional = select.select(inputs, outputs, inputs)
-        handle_readable(readable)

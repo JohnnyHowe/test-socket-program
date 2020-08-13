@@ -139,20 +139,17 @@ class DateServer:
             text ...
         """
         # TODO language code, time
-        year = 0
-        month = 0
-        day = 0
-        hour = 0
-        minute = 0
+        today = datetime.datetime.today()
         magic_no_byte1 = self.MAGIC_NUMBER >> 8
         magic_no_byte2 = self.MAGIC_NUMBER & 0xFF
+        language_code = 1
         packet_list = [
             magic_no_byte1, magic_no_byte2,
             0, self.DT_RESPONSE_CODE,
-            0, 1,
-            0, year,
-            month, day,
-            hour, minute,
+            0, language_code,
+            today.year >> 8, today.year & 0xFF,
+            today.month, today.day,
+            today.hour, today.minute,
             0,
         ]
         return bytearray(packet_list)
