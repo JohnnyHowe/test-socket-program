@@ -67,17 +67,22 @@ def process_packet(packet, sock, source):
         sock (socket): socket the packet was received from
         source (tuple): TODO
     """
-    magic_no, info_type, packet_type = get_request_packet_info(packet)
+    packet_info = get_request_packet_info(packet)
+    if packet_info is None:
+        raise Exception("Didn't like that")
+    else:
+        magic_no, info_type, packet_type = packet_info
 
     if not check_request(magic_no, info_type, packet_type):
         # TODO Better messages pls
         print("Uh oh, this isn't a valid request packet!")
+        quit()
         return
 
     print("Request received")
     response_packet = compose_response_packet(info_type)
-    sock.sendto(response_packet, source)
     print("Sending response")
+    sock.sendto(response_packet, source)
     quit()
 
 
@@ -94,18 +99,23 @@ def compose_response_packet(request_type):
         length (1 byte),
         text ...
     """
-
     # TODO language code, time
     year = 0
     month = 0
     day = 0
     hour = 0
     minute = 0
-    packet_str = get_padded_bin_str(MAGIC_NUMBER, 16) + get_padded_bin_str(DT_RESPONSE_CODE, 16) + \
-                 get_padded_bin_str(1, 16) + get_padded_bin_str(year, 16) + \
-                 get_padded_bin_str(month, 8) + get_padded_bin_str(day, 8) + \
-                 get_padded_bin_str(hour, 8) + get_padded_bin_str(minute, 8)
-    return bytearray(packet_str, "utf-8")
+    magic_no_byte1 = MAGIC_NUMBER >> 8
+    magic_no_byte2 = MAGIC_NUMBER & 0xFF
+    packet_list = [
+        magic_no_byte1, magic_no_byte2,
+        0, DT_RESPONSE_CODE,
+        0, 1,
+        0, year,
+        month, day,
+        hour, minute,
+    ]
+    return bytearray(packet_list)
 
 
 def get_padded_bin_str(n, num_chars=16):
@@ -138,18 +148,11 @@ def get_request_packet_info(packet):
         (int) info type integer
         (int) packet type integer
     """
-    if len(packet) != 48:
+    if len(packet) != 6:
         return None
-
-    magic_no_str = packet[0:16]
-    magic_no = int(magic_no_str, base=2)
-
-    info_type_str = packet[16:32]
-    info_type = int(info_type_str, base=2)
-
-    packet_type_str = packet[32:48]
-    packet_type = int(packet_type_str, base=2)
-
+    magic_no = packet[0] << 8 | packet[1]
+    info_type = packet[2] << 8 | packet[3]
+    packet_type = packet[4] << 8 | packet[5]
     return magic_no, info_type, packet_type
 
 
@@ -170,6 +173,7 @@ def check_request(received_magic_no, packet_type, info_type):
         (bool) whether the info passes the checks
     """
     if received_magic_no != MAGIC_NUMBER:
+        print(received_magic_no)
         return False
     elif packet_type != 1:
         return False
@@ -195,5 +199,4 @@ if __name__ == '__main__':
     while inputs:
         readable, writable, exceptional = select.select(inputs, outputs, inputs)
         handle_readable(readable)
-
 

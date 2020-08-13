@@ -118,7 +118,7 @@ def get_connected_socket(server_ip, port):
     return sock
 
 
-def get_request_packet(request_type):
+def compose_request_packet(request_type):
     """ Get a formatted request packet with the packetType and requestType.
 
     To be a 6 byte bytearray where
@@ -136,9 +136,9 @@ def get_request_packet(request_type):
         request_type_int = DATE_REQUEST_CODE
     else:
         request_type_int = TIME_REQUEST_CODE
-    pack_str = get_padded_bin_str(MAGIC_NUMBER, 16) + get_padded_bin_str(DT_REQUEST_CODE) + \
-               get_padded_bin_str(request_type_int)
-    return bytearray(pack_str, "utf-8")
+    magic_no_byte1 = MAGIC_NUMBER >> 8
+    magic_no_byte2 = MAGIC_NUMBER & 0xFF
+    return bytearray([magic_no_byte1, magic_no_byte2, 0, 1, 0, request_type_int])
 
 
 def get_padded_bin_str(n, num_chars=16):
@@ -167,16 +167,16 @@ if __name__ == '__main__':
 
     print("Connected to {} on port {}".format(ip, port))
 
-    request_packet = get_request_packet(info_type)
+    request_packet = compose_request_packet(info_type)
     sock.sendto(request_packet, (ip, port))
 
     inputs = [sock]
     outputs = []
     message_queues = {}
 
-    while inputs:
-        readable, writable, exceptional = select.select(inputs, outputs, inputs)
-        for i in readable:
-            packet, source = i.recvfrom(1024)
-            print(packet)
-            quit()
+    readable, writable, exceptional = select.select(inputs, outputs, inputs, 1)
+    print(readable)
+    for i in readable:
+        packet, source = i.recvfrom(1024)
+        print(packet)
+        quit()
