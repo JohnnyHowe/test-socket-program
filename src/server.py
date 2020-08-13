@@ -1,6 +1,7 @@
 import sys
 import select
 import socket
+import datetime
 
 MIN_PORT = 1024     # Inclusive
 MAX_PORT = 64000    # Inclusive
@@ -76,14 +77,11 @@ def process_packet(packet, sock, source):
     if not check_request(magic_no, info_type, packet_type):
         # TODO Better messages pls
         print("Uh oh, this isn't a valid request packet!")
-        quit()
         return
-
     print("Request received")
     response_packet = compose_response_packet(info_type)
     print("Sending response")
     sock.sendto(response_packet, source)
-    quit()
 
 
 def compose_response_packet(request_type):
@@ -173,7 +171,6 @@ def check_request(received_magic_no, packet_type, info_type):
         (bool) whether the info passes the checks
     """
     if received_magic_no != MAGIC_NUMBER:
-        print(received_magic_no)
         return False
     elif packet_type != 1:
         return False
@@ -199,4 +196,5 @@ if __name__ == '__main__':
     while inputs:
         readable, writable, exceptional = select.select(inputs, outputs, inputs)
         handle_readable(readable)
+
 
