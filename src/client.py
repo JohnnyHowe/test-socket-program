@@ -12,6 +12,10 @@ DATE_REQUEST_CODE = 0x0001
 TIME_REQUEST_CODE = 0x0001
 
 
+class DateClient:
+    def __init__(self):
+        pass
+
 def check_num_parameters():
     """ Were all 3 parameters given when the program was run?
     If yes, do nothing
@@ -168,8 +172,6 @@ def handle_readable(readable):
         if isinstance(sock, socket.socket):
             packet, source = sock.recvfrom(1024)
             process_packet(packet, sock, source)
-        else:
-            raise Exception("Got something that isn't a socket")
 
 
 def process_packet(packet, sock, source):
@@ -181,19 +183,8 @@ def process_packet(packet, sock, source):
         sock (socket): socket the packet was received from
         source (tuple): TODO
     """
-    get_response_packet_info(packet)
-    # magic_no, info_type, packet_type = get_request_packet_info(packet)
-    #
-    # if not check_request(magic_no, info_type, packet_type):
-    #     # TODO Better messages pls
-    #     print("Uh oh, this isn't a valid request packet!")
-    #     return
-    #
-    # print("Request received")
-    # response_packet = compose_response_packet(info_type)
-    # sock.sendto(response_packet, source)
-    # print("Sending response")
-    # quit()
+    packet_bits = get_response_packet_info(packet)
+    print(packet_bits)
 
 
 def get_response_packet_info(packet):
@@ -217,18 +208,17 @@ def get_response_packet_info(packet):
         (int) length of text section in bytes
         (str) text field from packet
     """
-    print(len(packet))
-    if len(packet) < 13 * 8:    # 13 bytes is the header size
+    if len(packet) < 13:    # 13 bytes is the header size
         return None
-    magic_no = int(packet[0:16], base=2)
-    packet_type = int(packet[16:32], base=2)
-    language_code = int(packet[32:48], base=2)
-    year = int(packet[48:64], base=2)
-    month = int(packet[64:72], base=2)
-    day = int(packet[72:80], base=2)
-    hour = int(packet[80:88], base=2)
-    minute = int(packet[88:96], base=2)
-    length = int(packet[96:104], base=2)
+    magic_no = packet[0] << 8 | packet[1]
+    packet_type = packet[2] << 8 | packet[3]
+    language_code = packet[4] << 8 | packet[5]
+    year = packet[6] << 8 | packet[7]
+    month = packet[8]
+    day = packet[9]
+    hour = packet[10]
+    minute = packet[11]
+    length = packet[12]
     return magic_no, packet_type, language_code, year, month, day, hour, minute, length, "ass"
 
 
@@ -240,7 +230,7 @@ if __name__ == '__main__':
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    print("Connected to {} on port {}".format(ip, port))
+    print("Yelling at {} on port {}".format(ip, port))
 
     request_packet = compose_request_packet(info_type)
     sock.sendto(request_packet, (ip, port))
