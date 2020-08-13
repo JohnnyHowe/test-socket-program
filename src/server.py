@@ -1,6 +1,7 @@
 import sys
 import select
 import socket
+import datetime
 
 MIN_PORT = 1024     # Inclusive
 MAX_PORT = 64000    # Inclusive
@@ -73,12 +74,10 @@ def process_packet(packet, sock, source):
         # TODO Better messages pls
         print("Uh oh, this isn't a valid request packet!")
         return
-
     print("Request received")
     response_packet = compose_response_packet(info_type)
-    sock.sendto(response_packet, source)
     print("Sending response")
-    quit()
+    sock.sendto(response_packet, source)
 
 
 def compose_response_packet(request_type):
@@ -94,17 +93,13 @@ def compose_response_packet(request_type):
         length (1 byte),
         text ...
     """
-
-    # TODO language code, time
-    year = 0
-    month = 0
-    day = 0
-    hour = 0
-    minute = 0
+    now = datetime.datetime.now()
+    text_bn_str = "0" * 10 * 8
     packet_str = get_padded_bin_str(MAGIC_NUMBER, 16) + get_padded_bin_str(DT_RESPONSE_CODE, 16) + \
-                 get_padded_bin_str(1, 16) + get_padded_bin_str(year, 16) + \
-                 get_padded_bin_str(month, 8) + get_padded_bin_str(day, 8) + \
-                 get_padded_bin_str(hour, 8) + get_padded_bin_str(minute, 8)
+                 get_padded_bin_str(1, 16) + get_padded_bin_str(now.year, 16) + \
+                 get_padded_bin_str(now.month, 8) + get_padded_bin_str(now.day, 8) + \
+                 get_padded_bin_str(now.hour, 8) + get_padded_bin_str(now.minute, 8) + \
+                 get_padded_bin_str(0, 8) + text_bn_str
     return bytearray(packet_str, "utf-8")
 
 

@@ -12,7 +12,6 @@ DATE_REQUEST_CODE = 0x0001
 TIME_REQUEST_CODE = 0x0001
 
 
-
 def check_num_parameters():
     """ Were all 3 parameters given when the program was run?
     If yes, do nothing
@@ -157,6 +156,82 @@ def get_padded_bin_str(n, num_chars=16):
     return "0" * to_add + bin_n
 
 
+def handle_readable(readable):
+    """ Handle the incoming packets.
+    Given a list of readable sockets, read the data and process it accordingly
+    TODO what does that mean
+
+    Args:
+        readable (list): list of readable incoming things, given by select.select
+    """
+    for sock in readable:
+        if isinstance(sock, socket.socket):
+            packet, source = sock.recvfrom(1024)
+            process_packet(packet, sock, source)
+        else:
+            raise Exception("Got something that isn't a socket")
+
+
+def process_packet(packet, sock, source):
+    """ Given a packet, check if it's a request packet,
+    if the packet is a request, process it and send back the response.
+
+    Args:
+        packet (bytearray): The received packet
+        sock (socket): socket the packet was received from
+        source (tuple): TODO
+    """
+    get_response_packet_info(packet)
+    # magic_no, info_type, packet_type = get_request_packet_info(packet)
+    #
+    # if not check_request(magic_no, info_type, packet_type):
+    #     # TODO Better messages pls
+    #     print("Uh oh, this isn't a valid request packet!")
+    #     return
+    #
+    # print("Request received")
+    # response_packet = compose_response_packet(info_type)
+    # sock.sendto(response_packet, source)
+    # print("Sending response")
+    # quit()
+
+
+def get_response_packet_info(packet):
+    """ Given a packet bytearray, extract the info from it.
+
+    If the packet is the right length to be a response (23 bytes), return its info,
+    If not, return None.
+
+    Args:
+        packet (bytearray): the received packet.
+
+    Returns:
+        (int) magic number from packet
+        (int) packet type (should be 2 for response)
+        (int) language code (1 = english, 2 = maori, 3 = german)
+        (int) year
+        (int) month (1 = jan, 2 = feb ... )
+        (int) day (between 1 and 31 - inclusive)
+        (int) hour (0 to 23 - inclusive)
+        (int) minute (0 to 59 - inclusive)
+        (int) length of text section in bytes
+        (str) text field from packet
+    """
+    print(len(packet))
+    if len(packet) < 13 * 8:    # 13 bytes is the header size
+        return None
+    magic_no = int(packet[0:16], base=2)
+    packet_type = int(packet[16:32], base=2)
+    language_code = int(packet[32:48], base=2)
+    year = int(packet[48:64], base=2)
+    month = int(packet[64:72], base=2)
+    day = int(packet[72:80], base=2)
+    hour = int(packet[80:88], base=2)
+    minute = int(packet[88:96], base=2)
+    length = int(packet[96:104], base=2)
+    return magic_no, packet_type, language_code, year, month, day, hour, minute, length, "ass"
+
+
 if __name__ == '__main__':
     check_num_parameters()
     ip = get_ip_parameter()
@@ -176,7 +251,4 @@ if __name__ == '__main__':
 
     while inputs:
         readable, writable, exceptional = select.select(inputs, outputs, inputs)
-        for i in readable:
-            packet, source = i.recvfrom(1024)
-            print(packet)
-            quit()
+        handle_readable(readable)
