@@ -14,19 +14,31 @@ class DateServer:
 
     TODO more pls
     """
+    MAGIC_NUMBER = 0x497E
+    DT_REQUEST_CODE = 0x0001
+    DT_RESPONSE_CODE = 0x0002
+    DATE_REQUEST_CODE = 0x0001
+    TIME_REQUEST_CODE = 0x0002
+
+    ENG_CODE = 1
+    MAO_CODE = 2
+    GER_CODE = 3
+
+    ip = socket.gethostbyname(socket.gethostname())
+
     def __init__(self, eng_port, mao_port, ger_port):
-        self.MAGIC_NUMBER = 0x497E
-        self.DT_REQUEST_CODE = 0x0001
-        self.DT_RESPONSE_CODE = 0x0002
-        self.DATE_REQUEST_CODE = 0x0001
-        self.TIME_REQUEST_CODE = 0x0002
+        self.ports = {
+            self.ENG_CODE: eng_port,
+            self.MAO_CODE: mao_port,
+            self.GER_CODE: ger_port,
+        }
+        self.language_codes = {v: k for k, v in self.ports.items()}  # Reverse ports dict
 
-        self.ip = socket.gethostbyname(socket.gethostname())
+        self.sockets = {}
+        for code in [self.ENG_CODE, self.MAO_CODE, self.GER_CODE]:
+            self.sockets[code] = self.get_socket(self.ports[code])
 
-        self.ENG_CODE = 1
-        self.MAO_CODE = 2
-        self.GER_CODE = 3
-
+        # Text formatting tings
         self.TEXT_FORMATS = {
             self.TIME_REQUEST_CODE: {
                 self.ENG_CODE: "The current time is {0}:{1}",
@@ -39,7 +51,6 @@ class DateServer:
                 self.GER_CODE: "Heute ist der {2}. {3} {4}"
             }
         }
-
         self.MONTHS = {
             self.ENG_CODE: ["January", "February", "March", "April", "May", "June", "July",
                             "August", "September", "October", "November", "December"],
@@ -49,17 +60,6 @@ class DateServer:
             self.GER_CODE: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
                             "August", "September", "Oktober", "November", "Dezember"],
         }
-
-        self.ports = {
-            self.ENG_CODE: eng_port,
-            self.MAO_CODE: mao_port,
-            self.GER_CODE: ger_port,
-        }
-        self.language_codes = {v: k for k, v in self.ports.items()}      # Reverse ports dict
-
-        self.sockets = {}
-        for code in [self.ENG_CODE, self.MAO_CODE, self.GER_CODE]:
-            self.sockets[code] = self.get_socket(self.ports[code])
 
     def get_socket(self, port):
         """ Get a new socket bound to this machine and port. """
