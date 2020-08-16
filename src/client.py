@@ -37,11 +37,15 @@ class DateClient:
         sock.sendto(self.compose_request_packet(request_type), (addr, port))
 
         # Wait for response
+        packet = None
         readable, writable, exceptional = select.select([sock], [], [sock], timeout)
         for item in readable:
             packet_info = self.handle_readable(item)
             if packet_info is not None:
-                return packet_info
+                packet = packet_info
+                break
+        sock.close()
+        return packet
 
     def compose_request_packet(self, request_type):
         """ Get a formatted request packet with the packetType and requestType.
@@ -73,16 +77,14 @@ class DateClient:
         """
         if isinstance(readable, socket.socket):
             packet, source = readable.recvfrom(1024)
-            return self.process_response_packet(packet, readable, source)
+            return self.process_response_packet(packet)
 
-    def process_response_packet(self, packet, sock, source):
+    def process_response_packet(self, packet):
         """ Given a packet, check if it's a request packet,
         if the packet is a request, process it and send back the response.
 
         Args:
             packet (bytearray): The received packet
-            sock (socket): socket the packet was received from
-            source (tuple): TODO
         """
         if len(packet) < 13:    # 13 bytes is the header size
             print("Got response that was too small")
@@ -96,7 +98,7 @@ class DateClient:
         hour = packet[10]
         minute = packet[11]
         length = packet[12]
-        text = packet[13:].decode("utf-8")
+        text = packet[13:]
 
         self.check_response(magic_no, packet_type, language_code, year, month, day, hour, minute, length, text)
         return magic_no, packet_type, language_code, year, month, day, hour, minute, length, text
@@ -138,7 +140,7 @@ def check_num_parameters():
     If yes, do nothing
     If not, call an exception. """
     if len(sys.argv) < 4:
-        raise Exception("Client needs 3 parameters! (info type, server IP, port")
+        raise Exception("Client needs 3 parameters! (info type, server IP, port)")
 
 
 def get_info_type_parameter():

@@ -77,6 +77,16 @@ class DateServer:
             readable, writable, exceptional = select.select(inputs, outputs, inputs)
             for item in readable:
                 self.handle_readable(item)
+        # Close sockets
+        for sock in inputs:
+            sock.close()
+
+    def print_address(self):
+        """ Print the ip addr and ports of the server to the terminal. """
+        print("Running on " + self.ip)
+        print("ENG port: {}".format(self.sockets[self.ENG_CODE].getsockname()[1]))
+        print("MAO port: {}".format(self.sockets[self.MAO_CODE].getsockname()[1]))
+        print("GER port: {}".format(self.sockets[self.GER_CODE].getsockname()[1]))
 
     def handle_readable(self, readable):
         """ Given a readable from select.select, handle it.
@@ -181,6 +191,9 @@ class DateServer:
         text = self.TEXT_FORMATS[request_type][language_code].format(today.hour, today.minute, self.MONTHS[language_code][today.month - 1], today.day, today.year)
         text_array = bytearray(text, "utf-8")
 
+        if len(text_array) > 255:
+            raise Exception("Text too long :0")
+
         magic_no_byte1 = self.MAGIC_NUMBER >> 8
         magic_no_byte2 = self.MAGIC_NUMBER & 0xFF
         packet_list = [
@@ -202,7 +215,10 @@ def get_ports():
         for i in range(1, NUM_PORTS + 1):
             port = int(sys.argv[i])
             if MIN_PORT <= port <= MAX_PORT:
-                ports.append(port)
+                if port not in ports:
+                    ports.append(port)
+                else:
+                    raise Exception("Ports must be different")
             else:
                 raise Exception("Ports must be between {} and {} (inclusive)".format(MIN_PORT, MAX_PORT))
     else:
@@ -213,5 +229,6 @@ def get_ports():
 if __name__ == '__main__':
     eng_port, mao_port, ger_port = get_ports()
     server = DateServer(eng_port, mao_port, ger_port)
+    server.print_address()
     server.run()
 

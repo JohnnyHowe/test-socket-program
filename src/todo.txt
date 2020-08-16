@@ -1,11 +1,7 @@
-Ports must be different
-if making ports fails, show error message
 if packet isn't legit, say in terminal and continue
-if outgoing text is longer than 255 bytes, don't do it
 
 ip addr checks
 if response not legit, print error and exit
 client prints complete contents of response packet then exits
 find len of bytearray, not text message (not necceasrily equal)
 
-Return sockets to OS
