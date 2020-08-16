@@ -98,7 +98,7 @@ class DateClient:
         hour = packet[10]
         minute = packet[11]
         length = packet[12]
-        text = packet[13:]
+        text = packet[13:].decode("utf-8")
 
         self.check_response(magic_no, packet_type, language_code, year, month, day, hour, minute, length, text)
         return magic_no, packet_type, language_code, year, month, day, hour, minute, length, text
@@ -253,5 +253,8 @@ if __name__ == '__main__':
     # Send request and get the response
     client = DateClient()
     info = client.get_date_time(info_type_int, addr, port)
-    print_formatted_info(info)
+    if info is None:
+        raise Exception("No response packet received.")
+    else:
+        print_formatted_info(info)
 
