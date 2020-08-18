@@ -1,0 +1,15 @@
+Basic date/time networking assignment.
+To be run from command line.
+
+Server needs 3 port numbers as parameters.
+The ports are for requests in English, Maori and German respectively.
+Each port must be unique and between 1024 and 64000 (inclusive)
+
+Client needs request type, server ip and port as parameters.
+Request type is either "date" or "time"
+server ip is the IPv4 address of the machine the server is being run on.
+the port is the port to connect to on the server.
+
+The client will send the server a UDP "request packet", if this is receieved
+the server will build up a response and send it back. The response will
+contain the current date/time info as integers and in a text format.
